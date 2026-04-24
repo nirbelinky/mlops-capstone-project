@@ -243,7 +243,7 @@ MIN_IMPROVEMENT: float = 0.01               # 1 % — candidate must beat champi
 # Example: ref RMSE = 2.63, batch RMSE = 2.86 → degradation ≈ 8.7 % > 5 %.
 # Increase → more tolerant of performance drops (retrain less often);
 # decrease → more sensitive (retrain sooner).
-RMSE_DEGRADATION_THRESHOLD: float = 0.05    # 5 % RMSE increase triggers retrain
+RMSE_DEGRADATION_THRESHOLD: float = 0.10    # 10 % RMSE increase triggers retrain
 
 # ===========================================================================
 # Stability / promotion checks

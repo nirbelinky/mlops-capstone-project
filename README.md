@@ -43,8 +43,9 @@ pip install metaflow nannyml
 # 3. Download data
 python download_data.py
 #    Downloads:
-#      data/reference/2024-01.parquet   (reference / baseline)
-#      data/inbox/2024-02.parquet       (similar season — no drift expected)
+#      data/reference/2024-01.parquet   (reference / baseline — winter)
+#      data/reference/2024-02.parquet   (reference / baseline — winter)
+#      data/inbox/2024-03.parquet       (similar season — no drift expected)
 #      data/inbox/2024-06.parquet       (summer — drift / degradation likely)
 
 # 4. Start the MLflow UI (in a separate terminal)
@@ -62,7 +63,7 @@ Open <http://127.0.0.1:5000> to browse experiments.
 ```bash
 python flow.py run \
   --reference-path data/reference \
-  --batch-path data/inbox/2024-02.parquet
+  --batch-path data/inbox/2024-03.parquet
 ```
 
 ### Subsequent run (with a different batch)
@@ -211,7 +212,7 @@ All tuneable thresholds live in [`config.py`](config.py):
 
 | Constant | Default | Purpose |
 |---|---|---|
-| `RMSE_DEGRADATION_THRESHOLD` | `0.10` (10 %) | RMSE increase that triggers retraining |
+| `RMSE_DEGRADATION_THRESHOLD` | `0.10` (10 %) | RMSE increase (vs stored ref_rmse) that triggers retraining |
 | `MIN_IMPROVEMENT` | `0.01` (1 %) | Candidate must beat champion by this margin to be promoted |
 | `REFERENCE_REGRESSION_TOLERANCE` | `0.05` (5 %) | Candidate must not regress on reference data by more than this |
 | `MISSINGNESS_SPIKE_THRESHOLD` | `0.10` (10 %) | NannyML soft-gate: missingness increase vs reference |

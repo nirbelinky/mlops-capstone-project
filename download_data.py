@@ -74,7 +74,8 @@ BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data/green_tripdata_{year
 # pipeline identifies files by path, not by position in this list.
 FILES = [
     {"year_month": "2024-01", "local_name": "reference/2024-01.parquet"},
-    {"year_month": "2024-02", "local_name": "inbox/2024-02.parquet"},
+    {"year_month": "2024-02", "local_name": "reference/2024-02.parquet"},
+    {"year_month": "2024-03", "local_name": "inbox/2024-03.parquet"},
     {"year_month": "2024-06", "local_name": "inbox/2024-06.parquet"},
 ]
 
