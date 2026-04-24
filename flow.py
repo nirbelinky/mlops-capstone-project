@@ -170,6 +170,12 @@ class GreenTaxiTipFlow(FlowSpec):
         type=bool,
         help="If True, raise an intentional exception in the retrain step (for demo purposes).",
     )
+    optimize_hyperparams = Parameter(
+        "optimize-hyperparams",
+        default=False,
+        type=bool,
+        help="If True, run Optuna Bayesian hyperparameter tuning before training. Adds ~3 min per retrain but finds better parameters.",
+    )
 
     # ── Step: start ───────────────────────────────────────────────────
 
@@ -543,7 +549,15 @@ class GreenTaxiTipFlow(FlowSpec):
 
                 # 1. Compute CV RMSE (out-of-sample reference performance estimate).
                 #    This trains 5 temporary models internally — we only keep the RMSE.
-                cv_model = model_utils.train_model(X_ref, y_ref)
+                # Optionally tune hyperparameters before training.
+                if self.optimize_hyperparams:
+                    logger.info("🔍  Running Optuna hyperparameter tuning (%d trials)…",
+                                config.OPTUNA_N_TRIALS)
+                    best_params = model_utils.tune_hyperparams(X_ref, y_ref)
+                else:
+                    best_params = None  # use DEFAULT_PARAMS
+
+                cv_model = model_utils.train_model(X_ref, y_ref, params=best_params)
                 cv_scores = cross_val_score(
                     cv_model, X_ref, y_ref,
                     cv=5,
@@ -554,14 +568,14 @@ class GreenTaxiTipFlow(FlowSpec):
                 logger.info("Bootstrap CV RMSE on reference (5-fold): %.4f", self.cv_rmse_ref)
 
                 # 2. Train the FINAL champion on ALL reference data (no holdout).
-                initial_model = model_utils.train_model(X_ref, y_ref)
+                initial_model = model_utils.train_model(X_ref, y_ref, params=best_params)
 
                 # Log and register the bootstrap model within a nested MLflow run.
                 # This keeps the bootstrap training run separate but linked to the main pipeline run.
                 with mlflow.start_run(
                     run_name="bootstrap_train", nested=True
                 ) as bootstrap_run:
-                    mlflow.log_params(model_utils.DEFAULT_PARAMS)
+                    mlflow.log_params(best_params or model_utils.DEFAULT_PARAMS)
                     mlflow.log_metric("bootstrap_train_rows", len(X_ref))
                     mlflow.log_metric("bootstrap_cv_rmse", self.cv_rmse_ref)
                     run_id = model_utils.log_model_to_mlflow(
@@ -928,13 +942,16 @@ class GreenTaxiTipFlow(FlowSpec):
 
             logger.info(f"Training on combined data: {combined.shape[0]} rows")
 
-            # Tune hyperparameters using Optuna Bayesian search.
-            logger.info("🔍  Running Optuna hyperparameter tuning (%d trials)…",
-                        config.OPTUNA_N_TRIALS)
-            best_params = model_utils.tune_hyperparams(X_train, y_train)
-            mlflow.log_params({f"optuna_{k}": v for k, v in best_params.items()})
+            # Optionally tune hyperparameters before training.
+            if self.optimize_hyperparams:
+                logger.info("🔍  Running Optuna hyperparameter tuning (%d trials)…",
+                            config.OPTUNA_N_TRIALS)
+                best_params = model_utils.tune_hyperparams(X_train, y_train)
+                mlflow.log_params({f"optuna_{k}": v for k, v in best_params.items()})
+            else:
+                best_params = None  # use DEFAULT_PARAMS
 
-            # Train the new candidate model with the tuned parameters.
+            # Train the new candidate model (with tuned or default parameters).
             candidate = model_utils.train_model(X_train, y_train, params=best_params)
 
             # Evaluate the candidate model on the new batch data.
