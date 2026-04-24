@@ -61,6 +61,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import numpy as np
 import pandas as pd
+import xgboost as xgb
 import mlflow
 from mlflow import MlflowClient
 from metaflow import FlowSpec, Parameter, step, current
@@ -557,9 +558,9 @@ class GreenTaxiTipFlow(FlowSpec):
                 else:
                     best_params = None  # use DEFAULT_PARAMS
 
-                cv_model = model_utils.train_model(X_ref, y_ref, params=best_params)
+                cv_estimator = xgb.XGBRegressor(**(best_params or model_utils.DEFAULT_PARAMS))
                 cv_scores = cross_val_score(
-                    cv_model, X_ref, y_ref,
+                    cv_estimator, X_ref, y_ref,
                     cv=5,
                     scoring='neg_root_mean_squared_error',
                     n_jobs=-1,
