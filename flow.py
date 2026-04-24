@@ -857,10 +857,10 @@ class GreenTaxiTipFlow(FlowSpec):
 
         # Check for simulated failure (demo purposes).
         # This allows demonstrating Metaflow's resume capability by intentionally
-        # crashing the retrain step. Only triggers when retrain would actually run.
+        # crashing the retrain step regardless of whether retrain is needed.
         # On resume (origin_run_id is set), skip the simulated failure so the
         # pipeline can complete successfully.
-        if self.simulate_failure and self.retrain_needed:
+        if self.simulate_failure:
             if current.origin_run_id is not None:
                 logger.info("🔄  Resumed run — skipping simulated failure.")
             else:
