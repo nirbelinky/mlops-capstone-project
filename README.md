@@ -155,8 +155,7 @@ python flow.py run \
   --reference-path data/reference \
   --batch-path data/inbox/2024-06.parquet
 
-# Run 4 — Failure + Resume (reset first)
-python cleanup.py && python download_data.py
+# Run 4 — Failure + Resume (no reset needed, June is still in inbox)
 python flow.py run \
   --reference-path data/reference \
   --batch-path data/inbox/2024-06.parquet \
@@ -166,7 +165,8 @@ python flow.py resume
 
 > **Note:** The manual `mv` step between Run 2 and Run 3 promotes the
 > processed batch into the reference directory. This is what the watcher
-> automates (see Option B).
+> automates (see Option B). In manual mode, `flow.py` never moves files,
+> so June stays in `data/inbox/` and can be reused for Run 4.
 
 ### Option B — Automated demo (using the watcher)
 
@@ -185,8 +185,9 @@ python flow.py run \
 #   • June  → retrain + promote     → moved to data/reference/
 python watcher.py
 
-# Run 4 — Failure + Resume (reset first)
-python cleanup.py && python download_data.py
+# Run 4 — Failure + Resume (no reset needed)
+# Copy June back to inbox (the watcher moved it to reference)
+cp data/reference/2024-06.parquet data/inbox/
 python flow.py run \
   --reference-path data/reference \
   --batch-path data/inbox/2024-06.parquet \
@@ -196,7 +197,8 @@ python flow.py resume
 
 > **Note:** The watcher automatically moves successfully processed batches
 > from `data/inbox/` to `data/reference/`, expanding the reference window
-> for future runs.
+> for future runs. For Run 4, we copy June back to inbox since the watcher
+> already moved it.
 
 ---
 
