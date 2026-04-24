@@ -62,16 +62,20 @@ BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data/green_tripdata_{year
 # FILES is the manifest of datasets to download.  Each entry is a dict with:
 #   • "year_month" — the YYYY-MM string plugged into BASE_URL to form the
 #     remote URL (must match the TLC's naming convention).
-#   • "local_name" — the filename we save the file as locally.  We prefix
-#     with "reference_" or "batch_" to make the file's *role* in the pipeline
-#     immediately obvious from its name alone.
+#   • "local_name" — the relative path (under DATA_DIR) where the file is
+#     saved.  Files are organised into subdirectories by role:
+#       - ``reference/`` — baseline data the model was trained on.
+#       - ``inbox/``     — new batches waiting to be processed by the flow.
+#     The watcher script (``watcher.py``) moves successfully processed
+#     batches from ``inbox/`` into ``reference/`` so the reference window
+#     expands over time.
 #
 # The order matters only cosmetically (download sequence); the downstream
-# pipeline identifies files by name, not by position in this list.
+# pipeline identifies files by path, not by position in this list.
 FILES = [
-    {"year_month": "2024-01", "local_name": "reference_2024-01.parquet"},
-    {"year_month": "2024-02", "local_name": "batch_2024-02.parquet"},
-    {"year_month": "2024-06", "local_name": "batch_2024-06.parquet"},
+    {"year_month": "2024-01", "local_name": "reference/2024-01.parquet"},
+    {"year_month": "2024-02", "local_name": "inbox/2024-02.parquet"},
+    {"year_month": "2024-06", "local_name": "inbox/2024-06.parquet"},
 ]
 
 # DATA_DIR is the absolute path to the ``data/`` subdirectory that sits next
@@ -267,8 +271,11 @@ def download_all() -> None:
         # the BASE_URL template (e.g. "2024-01" → ".../green_tripdata_2024-01.parquet")
         url = BASE_URL.format(year_month=entry["year_month"])
 
-        # Construct the full local file path (e.g. ".../data/reference_2024-01.parquet")
+        # Construct the full local file path (e.g. ".../data/reference/2024-01.parquet")
         dest = os.path.join(DATA_DIR, entry["local_name"])
+
+        # Ensure the subdirectory (e.g. data/reference/, data/inbox/) exists.
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
 
         # --- Idempotency check ---
         # If the file already exists we assume a previous run completed

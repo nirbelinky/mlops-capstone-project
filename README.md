@@ -23,8 +23,10 @@ reference data, and flips the `@champion` alias in the MLflow Model Registry.
 | [`model_utils.py`](model_utils.py) | Training, evaluation, registry helpers, promotion logic |
 | [`decision_logger.py`](decision_logger.py) | Structured decision audit trail (`decision.json` artifacts) |
 | [`download_data.py`](download_data.py) | Downloads reference & batch parquet files from the NYC TLC site |
+| [`watcher.py`](watcher.py) | Polling script — watches `data/inbox/` for new batches, runs the flow, moves processed files to `data/reference/` (Stretch A) |
 | [`design_doc.md`](design_doc.md) | Full design specification for the capstone |
-| `data/` | Parquet data files (created by `download_data.py`) |
+| `data/reference/` | Reference parquet files — the expanding baseline window |
+| `data/inbox/` | New batch files waiting to be processed |
 
 ---
 
@@ -41,9 +43,9 @@ pip install metaflow nannyml
 # 3. Download data
 python download_data.py
 #    Downloads:
-#      data/reference_2024-01.parquet   (reference / baseline)
-#      data/batch_2024-02.parquet       (similar season — no drift expected)
-#      data/batch_2024-06.parquet       (summer — drift / degradation likely)
+#      data/reference/2024-01.parquet   (reference / baseline)
+#      data/inbox/2024-02.parquet       (similar season — no drift expected)
+#      data/inbox/2024-06.parquet       (summer — drift / degradation likely)
 
 # 4. Start the MLflow UI (in a separate terminal)
 mlflow ui --backend-store-uri sqlite:///mlflow_tracking/mlflow.db --port 5000
@@ -59,16 +61,16 @@ Open <http://127.0.0.1:5000> to browse experiments.
 
 ```bash
 python flow.py run \
-  --reference-path data/reference_2024-01.parquet \
-  --batch-path data/batch_2024-02.parquet
+  --reference-path data/reference \
+  --batch-path data/inbox/2024-02.parquet
 ```
 
 ### Subsequent run (with a different batch)
 
 ```bash
 python flow.py run \
-  --reference-path data/reference_2024-01.parquet \
-  --batch-path data/batch_2024-06.parquet
+  --reference-path data/reference \
+  --batch-path data/inbox/2024-06.parquet
 ```
 
 ### Resume after failure
@@ -122,8 +124,8 @@ automatically):
 ```bash
 # 1. Run the flow with simulated failure (will fail at retrain)
 python flow.py run \
-  --reference-path data/reference_2024-01.parquet \
-  --batch-path data/batch_2024-06.parquet \
+  --reference-path data/reference \
+  --batch-path data/inbox/2024-06.parquet \
   --simulate-failure True
 
 # 2. Resume from the failed step (no --simulate-failure needed)
@@ -138,6 +140,56 @@ failure, allowing the pipeline to complete.
 - The flow resumes from `retrain`, not from `start`
 - Previously completed steps are not re-executed
 - Final decisions and artifacts reflect the successful resumed execution
+
+---
+
+## Automated Batch Processing (Stretch A)
+
+The [`watcher.py`](watcher.py) script automates the flow by watching `data/inbox/`
+for new `.parquet` files. For each file found, it runs the pipeline and — on
+success — moves the batch into `data/reference/` so it becomes part of the
+expanding reference window for future runs.
+
+### One-shot mode (process all pending files and exit)
+
+```bash
+python watcher.py
+```
+
+### Continuous polling mode
+
+```bash
+# Check every 60 seconds for new files
+python watcher.py --poll-interval 60
+```
+
+### With cron (e.g. every 15 minutes)
+
+```bash
+*/15 * * * * cd /path/to/project && python watcher.py >> watcher.log 2>&1
+```
+
+### Dry-run mode (preview without executing)
+
+```bash
+python watcher.py --dry-run
+```
+
+### Data lifecycle
+
+```
+data/inbox/2024-06.parquet          ← new batch arrives here
+     │
+     ▼
+flow.py run --reference-path data/reference
+            --batch-path data/inbox/2024-06.parquet
+     │
+     ├─ success → move to data/reference/2024-06.parquet
+     │            (becomes part of future reference)
+     │
+     └─ failure → leave in data/inbox/
+                  (will be retried on next watcher run)
+```
 
 ---
 
