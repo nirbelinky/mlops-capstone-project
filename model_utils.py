@@ -93,6 +93,23 @@ DEFAULT_PARAMS: dict = {
 # ---------------------------------------------------------------------------
 
 
+def suppress_mlflow_logs() -> None:
+    """Suppress noisy MLflow / Alembic log messages.
+
+    Each Metaflow step runs as a separate subprocess that re-initialises
+    MLflow, so these suppressions must be re-applied in every process.
+    Centralising them here avoids duplicating the logger list in multiple
+    modules.
+    """
+    logging.getLogger("alembic").setLevel(logging.WARNING)
+    logging.getLogger("mlflow.store.db.utils").setLevel(logging.WARNING)
+    logging.getLogger("mlflow.utils.requirements_utils").setLevel(logging.WARNING)
+    logging.getLogger("mlflow.models.model").setLevel(logging.ERROR)
+    logging.getLogger("mlflow.models.signature").setLevel(logging.ERROR)
+    logging.getLogger("mlflow.tracking._model_registry.client").setLevel(logging.WARNING)
+    logging.getLogger("mlflow.tracking").setLevel(logging.WARNING)
+
+
 def init_mlflow(model_name: str | None = None) -> str:
     """Configure the MLflow tracking URI and experiment.
 
@@ -120,16 +137,7 @@ def init_mlflow(model_name: str | None = None) -> str:
     - The experiment name is loaded from ``config.MLFLOW_EXPERIMENT_NAME``.
       If an experiment with this name does not exist, MLflow creates it.
     """
-    # Suppress noisy MLflow / Alembic initialisation messages.
-    # Each Metaflow step is a separate subprocess, so this must be
-    # re-applied every time init_mlflow() is called.
-    logging.getLogger("alembic").setLevel(logging.WARNING)
-    logging.getLogger("mlflow.store.db.utils").setLevel(logging.WARNING)
-    logging.getLogger("mlflow.utils.requirements_utils").setLevel(logging.WARNING)
-    logging.getLogger("mlflow.models.model").setLevel(logging.ERROR)
-    logging.getLogger("mlflow.models.signature").setLevel(logging.ERROR)
-    logging.getLogger("mlflow.tracking._model_registry.client").setLevel(logging.WARNING)
-    logging.getLogger("mlflow.tracking").setLevel(logging.WARNING)
+    suppress_mlflow_logs()
 
     # Set the MLflow tracking URI. This tells MLflow where to store tracking data.
     mlflow.set_tracking_uri(config.MLFLOW_TRACKING_URI)

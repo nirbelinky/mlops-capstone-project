@@ -79,13 +79,7 @@ logging.basicConfig(
 
 # Suppress noisy MLflow / Alembic initialisation messages that repeat in every
 # Metaflow step (each step is a separate subprocess that re-initialises MLflow).
-logging.getLogger("alembic").setLevel(logging.WARNING)
-logging.getLogger("mlflow.store.db.utils").setLevel(logging.WARNING)
-logging.getLogger("mlflow.utils.requirements_utils").setLevel(logging.WARNING)
-logging.getLogger("mlflow.models.model").setLevel(logging.ERROR)
-logging.getLogger("mlflow.models.signature").setLevel(logging.ERROR)
-logging.getLogger("mlflow.tracking._model_registry.client").setLevel(logging.WARNING)
-logging.getLogger("mlflow.tracking").setLevel(logging.WARNING)
+model_utils.suppress_mlflow_logs()
 
 logger = logging.getLogger(__name__)
 
