@@ -347,24 +347,19 @@ class GreenTaxiTipFlow(FlowSpec):
         """
         _log_step_banner("STEP 2/8: INTEGRITY GATE — Running hard rules + soft checks on raw batch")
 
-        # Execute both hard and soft integrity checks using the `integrity_checks` module.
-        # `hard_pass` indicates if critical checks passed, `soft_warnings` if non-critical issues were found.
-        hard_pass, soft_warnings, report = integrity_checks.run_integrity_checks(
-            self.ref_raw, self.batch_raw
-        )
-
-        # Store the results as Metaflow artifacts for use in subsequent steps.
-        self.hard_pass = hard_pass
-        self.integrity_warn = soft_warnings
-
         # Resume the main MLflow run to log decision and tags.
         _ensure_mlflow(self.mlflow_run_id)
         try:
+            # Execute both hard and soft integrity checks using the `integrity_checks` module.
+            self.hard_pass, self.integrity_warn, report = (
+                integrity_checks.run_integrity_checks(self.ref_raw, self.batch_raw)
+            )
+
             # Create a structured decision record for the integrity gate.
             integrity_decision = decision_logger.make_integrity_decision(
-                hard_pass=hard_pass,
+                hard_pass=self.hard_pass,
                 hard_failures=report["hard_failures"],
-                soft_warnings=soft_warnings,
+                soft_warnings=self.integrity_warn,
                 soft_report=report.get("soft_report") or {},
             )
             # Log the decision as an MLflow artifact and add it to the flow's decision list.
@@ -374,19 +369,19 @@ class GreenTaxiTipFlow(FlowSpec):
             self.decisions.append(integrity_decision)
 
             # Set MLflow tags to provide a quick overview of the integrity check results.
-            mlflow.set_tag("integrity_hard_pass", str(hard_pass))
-            mlflow.set_tag("integrity_soft_warnings", str(soft_warnings))
+            mlflow.set_tag("integrity_hard_pass", str(self.hard_pass))
+            mlflow.set_tag("integrity_soft_warnings", str(self.integrity_warn))
             mlflow.set_tag("integrity_status", report["overall_status"])
         finally:
             # Ensure the MLflow run is always ended.
             mlflow.end_run()
 
         # Provide console feedback based on the integrity check results.
-        if not hard_pass:
+        if not self.hard_pass:
             logger.info("❌  Batch REJECTED by hard integrity checks.")
             for f in report["hard_failures"]:
                 logger.info(f"    • {f}")
-        elif soft_warnings:
+        elif self.integrity_warn:
             logger.info("⚠️  Batch passed hard checks but has soft warnings.")
         else:
             logger.info("✅  Batch passed all integrity checks.")
