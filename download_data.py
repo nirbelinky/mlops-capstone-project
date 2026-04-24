@@ -6,27 +6,29 @@ Purpose
 This script is the **first step** in the MLOps capstone pipeline.  Before any
 model training, feature engineering, or drift detection can happen, we need raw
 taxi-trip data on disk.  The NYC Taxi & Limousine Commission (TLC) publishes
-monthly Parquet files on a public CloudFront CDN; this script fetches exactly
-the three months the capstone project requires and saves them locally under a
-``data/`` directory next to this file.
+monthly Parquet files on a public CloudFront CDN; this script fetches the
+months the capstone project requires and saves them locally under a ``data/``
+directory next to this file, organised into ``reference/`` and ``inbox/``
+subdirectories.
 
-Why these three specific months?
---------------------------------
+Why these specific months?
+--------------------------
 The capstone project is designed to demonstrate **data-drift detection** and
 **automated retraining**.  To make that concrete we pick:
 
-* **January 2024** — the *reference* (baseline) dataset.  The model is trained
-  on this month, so all drift comparisons are made against it.
-* **February 2024** — a *batch* from the same winter season.  Because the
-  travel patterns are similar to January, we expect **little or no drift**,
+* **January 2024** — *reference* (baseline).  Part of the initial training set.
+* **February 2024** — *reference* (baseline).  Same winter season as January;
+  together they form a two-month reference window for the bootstrap model.
+* **March 2024** — an *inbox batch* from the same season.  Because the travel
+  patterns are similar to the reference, we expect **little or no drift**,
   which lets us verify the pipeline's "no-retrain" path.
-* **June 2024** — a *batch* from summer.  Seasonal changes in travel behaviour
-  (tourism, weather, daylight hours) are likely to cause **measurable drift**,
-  triggering the pipeline's retraining logic.
+* **June 2024** — an *inbox batch* from summer.  Seasonal changes in travel
+  behaviour (tourism, weather, daylight hours) are likely to cause
+  **measurable drift**, triggering the pipeline's retraining logic.
 
 How to run
 ----------
-From the ``08_mlops_capstone_project/`` directory::
+From the project root directory::
 
     python download_data.py
 
