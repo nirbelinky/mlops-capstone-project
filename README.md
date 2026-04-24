@@ -87,13 +87,15 @@ Metaflow resumes from the last failed step; previously completed steps are
 
 ## Required Demo Runs
 
-The design doc requires **three separate runs** to demonstrate the pipeline:
+The design doc requires **three separate runs** to demonstrate the pipeline.
+Below are two ways to run them: manually (step by step) or using the watcher
+for automation.
 
 ### Run 1 — Baseline (no retrain, no promotion)
 
-Run with a batch that is close to the reference distribution (e.g.
-`batch_2024-02.parquet`). The champion performs well, so no retrain is
-triggered and no promotion occurs.
+Process a batch from the same season as the reference (March 2024). The
+champion performs well (~6% degradation, below the 10% threshold), so no
+retrain is triggered and no promotion occurs.
 
 **Expected evidence in MLflow:**
 
@@ -103,8 +105,8 @@ triggered and no promotion occurs.
 
 ### Run 2 — Retrain + Promotion (degradation triggers retrain)
 
-Run with a batch that exhibits drift (e.g. `batch_2024-06.parquet`). The
-champion's RMSE degrades beyond the threshold, a candidate is trained on
+Process a summer batch (June 2024) that exhibits seasonal drift. The
+champion's RMSE degrades beyond the 10% threshold, a candidate is trained on
 combined data, and — if it beats the champion — it is promoted.
 
 **Expected evidence in MLflow:**
@@ -120,27 +122,81 @@ combined data, and — if it beats the champion — it is promoted.
 `RuntimeError` in the `retrain` step — no source editing needed. Pass the flag
 on the first run to trigger the failure, then resume without it (the parameter
 defaults to `False`, so the resumed run skips the simulated failure
-automatically):
-
-```bash
-# 1. Run the flow with simulated failure (will fail at retrain)
-python flow.py run \
-  --reference-path data/reference \
-  --batch-path data/inbox/2024-06.parquet \
-  --simulate-failure True
-
-# 2. Resume from the failed step (no --simulate-failure needed)
-python flow.py resume
-```
-
-On resume, the flow detects it is a resumed run and skips the simulated
-failure, allowing the pipeline to complete.
+automatically).
 
 **Expected evidence:**
 
 - The flow resumes from `retrain`, not from `start`
 - Previously completed steps are not re-executed
 - Final decisions and artifacts reflect the successful resumed execution
+
+### Option A — Manual demo (step by step)
+
+```bash
+# 0. Fresh start
+python cleanup.py
+python download_data.py
+
+# Run 1 — Bootstrap + baseline (March batch, no retrain)
+python flow.py run \
+  --reference-path data/reference \
+  --batch-path data/inbox/2024-03.parquet
+
+# Run 2 — Same batch again (non-bootstrap, confirms no retrain at ~6%)
+python flow.py run \
+  --reference-path data/reference \
+  --batch-path data/inbox/2024-03.parquet
+
+# Move March into reference so June sees an expanded training window
+mv data/inbox/2024-03.parquet data/reference/
+
+# Run 3 — Summer batch (drift → retrain + promote)
+python flow.py run \
+  --reference-path data/reference \
+  --batch-path data/inbox/2024-06.parquet
+
+# Run 4 — Failure + Resume (reset first)
+python cleanup.py && python download_data.py
+python flow.py run \
+  --reference-path data/reference \
+  --batch-path data/inbox/2024-06.parquet \
+  --simulate-failure True
+python flow.py resume
+```
+
+> **Note:** The manual `mv` step between Run 2 and Run 3 promotes the
+> processed batch into the reference directory. This is what the watcher
+> automates (see Option B).
+
+### Option B — Automated demo (using the watcher)
+
+```bash
+# 0. Fresh start
+python cleanup.py
+python download_data.py
+
+# Run 1 — Bootstrap (creates initial champion)
+python flow.py run \
+  --reference-path data/reference \
+  --batch-path data/inbox/2024-03.parquet
+
+# Runs 2 + 3 — Watcher processes all inbox files automatically:
+#   • March → no retrain (6% < 10%) → moved to data/reference/
+#   • June  → retrain + promote     → moved to data/reference/
+python watcher.py
+
+# Run 4 — Failure + Resume (reset first)
+python cleanup.py && python download_data.py
+python flow.py run \
+  --reference-path data/reference \
+  --batch-path data/inbox/2024-06.parquet \
+  --simulate-failure True
+python flow.py resume
+```
+
+> **Note:** The watcher automatically moves successfully processed batches
+> from `data/inbox/` to `data/reference/`, expanding the reference window
+> for future runs.
 
 ---
 
