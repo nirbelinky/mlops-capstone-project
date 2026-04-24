@@ -113,21 +113,25 @@ combined data, and — if it beats the champion — it is promoted.
 
 ### Run 3 — Failure + Resume (workflow robustness)
 
-Inject an exception in a mid-flow step (e.g. add `raise RuntimeError("test")`
-at the top of the `retrain` step), run the flow, then remove the exception and
-resume:
+`flow.py` has a built-in `--simulate-failure` parameter that raises a
+`RuntimeError` in the `retrain` step — no source editing needed. Pass the flag
+on the first run to trigger the failure, then resume without it (the parameter
+defaults to `False`, so the resumed run skips the simulated failure
+automatically):
 
 ```bash
-# 1. Edit flow.py — add `raise RuntimeError("injected")` in the retrain step
-# 2. Run the flow (it will fail at retrain)
+# 1. Run the flow with simulated failure (will fail at retrain)
 python flow.py run \
   --reference-path data/reference_2024-01.parquet \
-  --batch-path data/batch_2024-06.parquet
+  --batch-path data/batch_2024-06.parquet \
+  --simulate-failure True
 
-# 3. Remove the injected exception from flow.py
-# 4. Resume from the failed step
+# 2. Resume from the failed step (no --simulate-failure needed)
 python flow.py resume
 ```
+
+On resume, the flow detects it is a resumed run and skips the simulated
+failure, allowing the pipeline to complete.
 
 **Expected evidence:**
 

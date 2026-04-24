@@ -853,6 +853,46 @@ class GreenTaxiTipFlow(FlowSpec):
             self.next(self.candidate_gate)
             return
 
+        # ── Idempotency guard for repeated resumes ─────────────────────
+        # Metaflow's `resume` always re-executes failed steps from the
+        # origin run, even if a previous resume already completed them
+        # successfully.  This guard prevents duplicate model registration
+        # by checking whether a candidate was already registered by a
+        # prior resume of the same origin run.
+        if current.origin_run_id is not None:
+            model_utils.init_mlflow()
+            client = MlflowClient()
+            existing_versions = client.search_model_versions(
+                f"name='{self.model_name}'"
+            )
+            for mv in existing_versions:
+                if mv.tags.get("metaflow_origin_run_id") == current.origin_run_id:
+                    logger.info(
+                        "♻️  Candidate v%s already registered by a previous "
+                        "resume of origin run %s — skipping duplicate retrain.",
+                        mv.version,
+                        current.origin_run_id,
+                    )
+                    self.candidate_version = int(mv.version)
+                    self.candidate_run_id = mv.run_id
+                    # Reconstruct candidate metrics from the existing model
+                    # version's MLflow run so downstream steps have them.
+                    prev_run = client.get_run(mv.run_id)
+                    self.candidate_metrics = {
+                        "rmse": prev_run.data.metrics.get("candidate_batch_rmse", 0.0),
+                        "mae": prev_run.data.metrics.get("candidate_batch_mae", 0.0),
+                        "r2": prev_run.data.metrics.get("candidate_batch_r2", 0.0),
+                        "median_ae": prev_run.data.metrics.get("candidate_batch_median_ae", 0.0),
+                    }
+                    self.candidate_ref_metrics = {
+                        "rmse": prev_run.data.metrics.get("candidate_ref_rmse", 0.0),
+                        "mae": prev_run.data.metrics.get("candidate_ref_mae", 0.0),
+                        "r2": prev_run.data.metrics.get("candidate_ref_r2", 0.0),
+                        "median_ae": prev_run.data.metrics.get("candidate_ref_median_ae", 0.0),
+                    }
+                    self.next(self.candidate_gate)
+                    return
+
         # Resume the main MLflow run to log training details and candidate model.
         _ensure_mlflow(self.mlflow_run_id)
         try:
@@ -929,6 +969,15 @@ class GreenTaxiTipFlow(FlowSpec):
                 str(self.candidate_version),
                 "validation_status",
                 "pending",
+            )
+            # Tag with the Metaflow origin run ID for idempotency on
+            # subsequent resumes (see guard above).
+            origin_id = current.origin_run_id or current.run_id
+            client.set_model_version_tag(
+                self.model_name,
+                str(self.candidate_version),
+                "metaflow_origin_run_id",
+                origin_id,
             )
 
             # Log key candidate metrics to the parent MLflow run for easy comparison.
