@@ -43,7 +43,7 @@ from __future__ import annotations
 # this project folder.  Change to an HTTP URI (e.g. "http://localhost:5000")
 # if you switch to a remote tracking server.
 # Used by: model_utils.setup_mlflow(), flow.py
-MLFLOW_TRACKING_URI = "sqlite:///../mlflow_tracking/mlflow.db"
+MLFLOW_TRACKING_URI = "sqlite:///mlflow_tracking/mlflow.db"
 
 # Experiment name under which all runs for this project are grouped.
 # Changing this creates a new experiment in the MLflow UI; existing runs

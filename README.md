@@ -32,14 +32,13 @@ reference data, and flips the `@champion` alias in the MLflow Model Registry.
 
 ```bash
 # 1. Create / activate the conda environment
-conda env create -f ../environment.yml   # first time only
+conda env create -f environment.yml   # first time only
 conda activate 22971-mlflow
 
 # 2. Install additional dependencies (Metaflow + NannyML)
 pip install metaflow nannyml
 
 # 3. Download data
-cd 08_mlops_capstone_project
 python download_data.py
 #    Downloads:
 #      data/reference_2024-01.parquet   (reference / baseline)
@@ -47,8 +46,7 @@ python download_data.py
 #      data/batch_2024-06.parquet       (summer — drift / degradation likely)
 
 # 4. Start the MLflow UI (in a separate terminal)
-cd 08_mlops_capstone_project
-mlflow ui --backend-store-uri sqlite:///../mlflow_tracking/mlflow.db --port 5000
+mlflow ui --backend-store-uri sqlite:///mlflow_tracking/mlflow.db --port 5000
 ```
 
 Open <http://127.0.0.1:5000> to browse experiments.
@@ -60,7 +58,6 @@ Open <http://127.0.0.1:5000> to browse experiments.
 ### Bootstrap run (first time — creates the initial champion)
 
 ```bash
-cd 08_mlops_capstone_project
 python flow.py run \
   --reference-path data/reference_2024-01.parquet \
   --batch-path data/batch_2024-02.parquet
