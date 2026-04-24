@@ -59,6 +59,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 import xgboost as xgb
+import optuna
 
 import mlflow
 import mlflow.sklearn
@@ -215,6 +216,74 @@ def train_model(X_train, y_train, params: dict | None = None):
     model.fit(X_train, y_train)
     logger.info("Model trained — params=%s", merged)
     return model
+
+
+def tune_hyperparams(
+    X_train,
+    y_train,
+    n_trials: int | None = None,
+    cv_folds: int | None = None,
+) -> dict:
+    """Find optimal XGBoost hyperparameters using Optuna Bayesian search.
+
+    Runs an Optuna study that evaluates candidate hyperparameter sets via
+    cross-validation.  The search space covers the most impactful XGBoost
+    parameters: ``n_estimators``, ``max_depth``, ``learning_rate``,
+    ``subsample``, and ``colsample_bytree``.
+
+    Parameters
+    ----------
+    X_train : pd.DataFrame
+        Training features.
+    y_train : pd.Series | np.ndarray
+        Training target values.
+    n_trials : int | None
+        Number of Optuna trials.  Defaults to ``config.OPTUNA_N_TRIALS``.
+    cv_folds : int | None
+        Number of cross-validation folds.  Defaults to ``config.OPTUNA_CV_FOLDS``.
+
+    Returns
+    -------
+    dict
+        The best hyperparameter set found, ready to pass to
+        ``train_model(X, y, params=best_params)``.
+    """
+    from sklearn.model_selection import cross_val_score
+
+    n_trials = n_trials or config.OPTUNA_N_TRIALS
+    cv_folds = cv_folds or config.OPTUNA_CV_FOLDS
+
+    def objective(trial):
+        params = {
+            "n_estimators": trial.suggest_int("n_estimators", 100, 500),
+            "max_depth": trial.suggest_int("max_depth", 3, 10),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
+            "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
+            "random_state": 42,
+        }
+        model = xgb.XGBRegressor(**params)
+        scores = cross_val_score(
+            model, X_train, y_train,
+            cv=cv_folds,
+            scoring="neg_root_mean_squared_error",
+        )
+        return -scores.mean()  # Optuna minimizes
+
+    # Suppress Optuna's verbose trial-by-trial logging
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+    study = optuna.create_study(direction="minimize")
+    study.optimize(objective, n_trials=n_trials)
+
+    best = study.best_params
+    logger.info(
+        "Optuna tuning complete — %d trials, best RMSE=%.4f, params=%s",
+        n_trials,
+        study.best_value,
+        best,
+    )
+    return best
 
 
 # ---------------------------------------------------------------------------

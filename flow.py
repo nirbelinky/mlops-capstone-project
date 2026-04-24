@@ -928,8 +928,14 @@ class GreenTaxiTipFlow(FlowSpec):
 
             logger.info(f"Training on combined data: {combined.shape[0]} rows")
 
-            # Train the new candidate model.
-            candidate = model_utils.train_model(X_train, y_train)
+            # Tune hyperparameters using Optuna Bayesian search.
+            logger.info("🔍  Running Optuna hyperparameter tuning (%d trials)…",
+                        config.OPTUNA_N_TRIALS)
+            best_params = model_utils.tune_hyperparams(X_train, y_train)
+            mlflow.log_params({f"optuna_{k}": v for k, v in best_params.items()})
+
+            # Train the new candidate model with the tuned parameters.
+            candidate = model_utils.train_model(X_train, y_train, params=best_params)
 
             # Evaluate the candidate model on the new batch data.
             X_eval = self.batch_eng[feature_cols]

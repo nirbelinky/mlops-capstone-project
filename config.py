@@ -287,3 +287,20 @@ REFERENCE_REGRESSION_TOLERANCE: float = 0.50  # candidate can't regress referenc
 # Changing this value would select a different payment type — almost
 # certainly not what you want unless the TLC schema changes.
 CREDIT_CARD_PAYMENT_TYPE: int = 1
+
+# ===========================================================================
+# Optuna hyperparameter tuning
+# ---------------------------------------------------------------------------
+# Controls the Bayesian hyperparameter search performed during the retrain
+# step.  Optuna uses Tree-structured Parzen Estimators (TPE) to explore the
+# parameter space efficiently.
+#
+# Used by: model_utils.tune_hyperparams()
+# ===========================================================================
+
+# Number of Optuna trials to run.  More trials = better exploration but
+# slower.  20–50 is usually sufficient for XGBoost on this dataset size.
+OPTUNA_N_TRIALS: int = 30
+
+# Number of cross-validation folds used to evaluate each trial.
+OPTUNA_CV_FOLDS: int = 5
