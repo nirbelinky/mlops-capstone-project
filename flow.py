@@ -85,8 +85,27 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Helper: ensure MLflow tracking is configured and (optionally) resume a run
+# Helpers
 # ---------------------------------------------------------------------------
+
+
+def _log_step_banner(message: str) -> None:
+    """Print a decorated step banner to the log.
+
+    Produces output like::
+
+        ============================================================
+        STEP 1/8: LOAD DATA — Reading reference and batch parquet files
+        ============================================================
+
+    Args:
+        message: The text to display between the separator lines.
+    """
+    logger.info("")
+    logger.info("=" * 60)
+    logger.info(message)
+    logger.info("=" * 60)
+
 
 def _ensure_mlflow(run_id: str | None = None):
     """Ensures MLflow tracking is correctly configured and optionally resumes a run.
@@ -187,10 +206,7 @@ class GreenTaxiTipFlow(FlowSpec):
         Returns:
             None: This step transitions to the next step using ``self.next()``.
         """
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("STEP 0/8: START — Initializing MLflow and flow parameters")
-        logger.info("=" * 60)
+        _log_step_banner("STEP 0/8: START — Initializing MLflow and flow parameters")
 
         # Initialize MLflow tracking URI and experiment name.
         model_utils.init_mlflow(self.model_name)
@@ -253,10 +269,7 @@ class GreenTaxiTipFlow(FlowSpec):
         Returns:
             None: This step transitions to the next step using ``self.next()``.
         """
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("STEP 1/8: LOAD DATA — Reading reference and batch parquet files")
-        logger.info("=" * 60)
+        _log_step_banner("STEP 1/8: LOAD DATA — Reading reference and batch parquet files")
 
         # Load the raw reference and batch data from the specified Parquet paths.
         self.ref_raw = pd.read_parquet(self.reference_path)
@@ -332,10 +345,7 @@ class GreenTaxiTipFlow(FlowSpec):
         Returns:
             None: This step transitions to the next step using ``self.next()``.
         """
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("STEP 2/8: INTEGRITY GATE — Running hard rules + soft checks on raw batch")
-        logger.info("=" * 60)
+        _log_step_banner("STEP 2/8: INTEGRITY GATE — Running hard rules + soft checks on raw batch")
 
         # Execute both hard and soft integrity checks using the `integrity_checks` module.
         # `hard_pass` indicates if critical checks passed, `soft_warnings` if non-critical issues were found.
@@ -419,10 +429,7 @@ class GreenTaxiTipFlow(FlowSpec):
         Returns:
             None: This step transitions to the next step using ``self.next()``.
         """
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("STEP 3/8: FEATURE ENGINEERING — Transforming raw data to model-ready features")
-        logger.info("=" * 60)
+        _log_step_banner("STEP 3/8: FEATURE ENGINEERING — Transforming raw data to model-ready features")
 
         # If the batch failed hard integrity checks, skip feature engineering.
         if not self.hard_pass:
@@ -500,10 +507,7 @@ class GreenTaxiTipFlow(FlowSpec):
         Returns:
             None: This step transitions to the next step using ``self.next()``.
         """
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("STEP 4/8: LOAD CHAMPION — Loading current champion model from registry")
-        logger.info("=" * 60)
+        _log_step_banner("STEP 4/8: LOAD CHAMPION — Loading current champion model from registry")
 
         # If the batch failed hard integrity checks, skip loading/bootstrapping a champion.
         if not self.hard_pass:
@@ -654,10 +658,7 @@ class GreenTaxiTipFlow(FlowSpec):
         Returns:
             None: This step transitions to the next step using ``self.next()``.
         """
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("STEP 5/8: EVALUATE CHAMPION — Computing RMSE on batch & ref, deciding retrain")
-        logger.info("=" * 60)
+        _log_step_banner("STEP 5/8: EVALUATE CHAMPION — Computing RMSE on batch & ref, deciding retrain")
 
         # If the batch failed hard integrity checks, skip model evaluation.
         if not self.hard_pass:
@@ -818,10 +819,7 @@ class GreenTaxiTipFlow(FlowSpec):
         Returns:
             None: This step transitions to the next step using ``self.next()``.
         """
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("STEP 6/8: RETRAIN — Training candidate model on combined data")
-        logger.info("=" * 60)
+        _log_step_banner("STEP 6/8: RETRAIN — Training candidate model on combined data")
 
         # Check for simulated failure (demo purposes).
         # This allows demonstrating Metaflow's resume capability by intentionally
@@ -1029,10 +1027,7 @@ class GreenTaxiTipFlow(FlowSpec):
             self.promoted (bool): Whether the candidate was promoted.
             self.decisions (list): Appended with the promotion decision dict.
         """
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("STEP 7/8: CANDIDATE GATE — Evaluating promotion criteria (P1-P4)")
-        logger.info("=" * 60)
+        _log_step_banner("STEP 7/8: CANDIDATE GATE — Evaluating promotion criteria (P1-P4)")
 
         # ── Guard: skip if batch failed integrity or no retrain occurred ──
         if not self.hard_pass or not self.retrain_needed:
@@ -1180,10 +1175,7 @@ class GreenTaxiTipFlow(FlowSpec):
             self.champion_version (str): Previous champion version number.
             self.candidate_version (str): Candidate version number.
         """
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("STEP 8/8: END — Logging decisions and printing summary")
-        logger.info("=" * 60)
+        _log_step_banner("STEP 8/8: END — Logging decisions and printing summary")
 
         # Resume the MLflow run one final time to log the combined artifact
         _ensure_mlflow(self.mlflow_run_id)
@@ -1196,10 +1188,7 @@ class GreenTaxiTipFlow(FlowSpec):
             mlflow.end_run()
 
         # ── Human-readable summary banner ──
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("  Pipeline Summary")
-        logger.info("=" * 60)
+        _log_step_banner("  Pipeline Summary")
         logger.info(f"  Decisions logged : {len(self.decisions)}")
         for d in self.decisions:
             logger.info(f"    [{d['stage']}] → {d['action']}")
