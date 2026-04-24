@@ -1,0 +1,8 @@
+# Data files (large parquet files)
+data/*.parquet
+
+# Python cache
+__pycache__/
+
+# Metaflow artifacts
+.metaflow/
