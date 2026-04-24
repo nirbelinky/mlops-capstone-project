@@ -595,6 +595,15 @@ class GreenTaxiTipFlow(FlowSpec):
                     "bootstrap",
                     "true",
                 )
+                # Store the fair out-of-sample reference RMSE (CV estimate)
+                # so that evaluate_champion can compare against it instead of
+                # re-evaluating on the training data (which would be in-sample).
+                client.set_model_version_tag(
+                    self.model_name,
+                    str(bootstrap_version),
+                    "ref_rmse",
+                    str(self.cv_rmse_ref),
+                )
 
                 # Store the bootstrap model's version and URI as flow artifacts.
                 self.champion_version = bootstrap_version
@@ -690,16 +699,41 @@ class GreenTaxiTipFlow(FlowSpec):
             )
 
             # Determine reference RMSE for the champion.
-            if self.is_bootstrap and hasattr(self, 'cv_rmse_ref') and self.cv_rmse_ref is not None:
-                # Bootstrap: use pre-computed CV RMSE (true out-of-sample estimate)
+            # We prefer the stored ``ref_rmse`` tag on the champion model
+            # version because it is always a fair out-of-sample estimate:
+            #   • Bootstrap champion → CV RMSE (5-fold cross-validation)
+            #   • Promoted candidate → candidate_ref_rmse (evaluated on
+            #     reference data the candidate was NOT trained on)
+            # Falling back to live evaluation would be in-sample for the
+            # bootstrap champion (trained on the same reference data),
+            # producing an artificially low baseline and triggering
+            # spurious retrains.
+            client = MlflowClient()
+            mv = client.get_model_version_by_alias(self.model_name, "champion")
+            stored_ref_rmse = mv.tags.get("ref_rmse")
+
+            if stored_ref_rmse is not None:
+                self.rmse_champion_on_ref = float(stored_ref_rmse)
+                logger.info(
+                    "Using stored ref_rmse tag from champion v%s: %.4f",
+                    mv.version,
+                    self.rmse_champion_on_ref,
+                )
+            elif self.is_bootstrap and hasattr(self, 'cv_rmse_ref') and self.cv_rmse_ref is not None:
+                # Fallback for bootstrap run within the same flow execution
                 self.rmse_champion_on_ref = self.cv_rmse_ref
                 logger.info("Using bootstrap CV RMSE for reference: %.4f", self.rmse_champion_on_ref)
             else:
-                # Non-bootstrap: evaluate champion on full reference (it's out-of-sample)
+                # Last resort: evaluate champion on reference (may be in-sample)
                 champion_ref_metrics = model_utils.evaluate_model(
                     champion_model, X_ref, y_ref
                 )
                 self.rmse_champion_on_ref = champion_ref_metrics["rmse"]
+                logger.warning(
+                    "No stored ref_rmse tag found — using live evaluation: %.4f "
+                    "(may be in-sample if champion was trained on reference data)",
+                    self.rmse_champion_on_ref,
+                )
 
             # Compute a naive baseline RMSE for informational logging.
             self.rmse_baseline = model_utils.compute_baseline_rmse(y_eval)
@@ -1086,6 +1120,16 @@ class GreenTaxiTipFlow(FlowSpec):
                     new_version=self.candidate_version,
                     old_version=self.champion_version,
                     reason=promote_reason,
+                )
+
+                # Store the candidate's fair reference RMSE on the new
+                # champion version so evaluate_champion can use it in
+                # future runs (avoids in-sample evaluation).
+                client.set_model_version_tag(
+                    self.model_name,
+                    str(self.candidate_version),
+                    "ref_rmse",
+                    str(self.candidate_ref_metrics["rmse"]),
                 )
 
                 # Tag the run with version lineage for traceability
