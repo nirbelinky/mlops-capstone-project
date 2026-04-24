@@ -74,7 +74,7 @@ import decision_logger
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s  %(name)-25s  %(levelname)-8s  %(message)s",
+    format="%(name)-25s  %(levelname)-8s  %(message)s",
 )
 
 # Suppress noisy MLflow / Alembic initialisation messages that repeat in every
