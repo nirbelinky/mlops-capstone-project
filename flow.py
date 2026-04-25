@@ -1168,6 +1168,10 @@ class GreenTaxiTipFlow(FlowSpec):
                 )
 
                 # ── Generate batch predictions with the newly promoted model ──
+                # This fulfills the "Inference demo" requirement from the design doc.
+                # By loading the model via its MLflow URI rather than using the
+                # in-memory object, we also verify that the @champion alias was
+                # successfully updated in the Model Registry.
                 new_champion_uri = f"models:/{self.model_name}@champion"
                 new_champion = mlflow.pyfunc.load_model(new_champion_uri)
                 X_batch = self.batch_eng[feature_cols].copy()
