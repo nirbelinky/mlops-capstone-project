@@ -35,7 +35,7 @@ reference data, and flips the `@champion` alias in the MLflow Model Registry.
 ```bash
 # 1. Create / activate the conda environment
 conda env create -f environment.yml   # first time only
-conda activate 22971-mlflow
+conda activate 22971-mlflow-nir-belinky-01
 
 # 2. Install additional dependencies (Metaflow + NannyML)
 pip install metaflow nannyml
