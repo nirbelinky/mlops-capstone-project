@@ -973,6 +973,14 @@ def run_giskard_scan(
     else:
         scan_df = eval_df.copy()
 
+    # ── Convert nullable Int64 columns to standard int64 ──
+    # Giskard's NumericalPerturbationDetector calls np.issubdtype() which
+    # cannot handle pandas nullable Int64Dtype.  Converting to numpy int64
+    # avoids the "Cannot interpret 'Int64Dtype()' as a data type" error.
+    for col in scan_df.columns:
+        if hasattr(scan_df[col].dtype, "numpy_dtype"):
+            scan_df[col] = scan_df[col].astype(scan_df[col].dtype.numpy_dtype)
+
     # ── Wrap model for Giskard ──
     def predict_fn(df: pd.DataFrame) -> np.ndarray:
         """Prediction function compatible with Giskard's Model wrapper."""
@@ -1031,9 +1039,14 @@ def run_giskard_scan(
     level_str = ", ".join(f"{k}: {v}" for k, v in sorted(level_summary.items()))
 
     if config.GISKARD_BLOCK_ON_ISSUES:
-        # Check for major/critical issues that should block promotion
-        blocking_levels = {"MAJOR", "CRITICAL", "HIGH"}
-        has_blocking = any(str(lvl).upper() in blocking_levels for lvl in issue_levels)
+        # Check for major/critical issues that should block promotion.
+        # Giskard's IssueLevel enum stringifies as "IssueLevel.MAJOR" etc.,
+        # so we check whether any blocking keyword appears in the string.
+        blocking_keywords = {"MAJOR", "CRITICAL", "HIGH"}
+        has_blocking = any(
+            any(kw in str(lvl).upper() for kw in blocking_keywords)
+            for lvl in issue_levels
+        )
 
         if has_blocking:
             reason = (
