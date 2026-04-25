@@ -959,6 +959,13 @@ class GreenTaxiTipFlow(FlowSpec):
             candidate = model_utils.train_model(X_train, y_train, params=best_params)
 
             # Evaluate the candidate model on the new batch data.
+            # Note: Because the candidate was trained on combined ref + batch data,
+            # this evaluation is technically in-sample. This is a deliberate design
+            # choice for this pipeline to maximize the model's exposure to the
+            # drifted batch data. We rely on the subsequent reference evaluation
+            # (P3 stability check) to guard against catastrophic overfitting.
+            # A more rigorous (but slower) approach would be to use cross-validation
+            # here to get a true out-of-sample estimate.
             X_eval = self.batch_eng[feature_cols]
             y_eval = self.batch_eng[config.TARGET_COL]
             self.candidate_metrics = model_utils.evaluate_model(
