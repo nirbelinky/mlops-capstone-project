@@ -730,7 +730,10 @@ class GreenTaxiTipFlow(FlowSpec):
                     self.rmse_champion_on_ref,
                 )
             elif self.is_bootstrap and hasattr(self, 'cv_rmse_ref') and self.cv_rmse_ref is not None:
-                # Fallback for bootstrap run within the same flow execution
+                # Fallback for the very first (bootstrap) run.
+                # If MLflow is slow to update the registry and the tag isn't
+                # visible yet, we can safely use the CV RMSE we just calculated
+                # in the previous step of this exact same run.
                 self.rmse_champion_on_ref = self.cv_rmse_ref
                 logger.info("Using bootstrap CV RMSE for reference: %.4f", self.rmse_champion_on_ref)
             else:
