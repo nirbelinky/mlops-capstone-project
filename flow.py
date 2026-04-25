@@ -987,7 +987,7 @@ class GreenTaxiTipFlow(FlowSpec):
             with mlflow.start_run(
                 run_name="candidate_train", nested=True
             ) as candidate_run:
-                mlflow.log_params(model_utils.DEFAULT_PARAMS)
+                mlflow.log_params(best_params or model_utils.DEFAULT_PARAMS)
                 mlflow.log_metric("train_rows", len(X_train))
 
                 # Log detailed metrics for the candidate model.
