@@ -806,6 +806,7 @@ def promote_champion(
 
     # Step 2: Tag the newly promoted champion model version with its role and promotion details.
     client.set_model_version_tag(model_name, str(new_version), "role", "champion")
+    client.set_model_version_tag(model_name, str(new_version), "validation_status", "approved")
     client.set_model_version_tag(model_name, str(new_version), "promoted_at", now_iso)
     client.set_model_version_tag(model_name, str(new_version), "promotion_reason", reason)
 
