@@ -400,7 +400,58 @@ def make_promotion_decision(
 
 
 # ---------------------------------------------------------------------------
-# 6. Log all decisions as a combined artifact
+# 6. Giskard scan decision builder
+# ---------------------------------------------------------------------------
+
+
+def make_giskard_decision(
+    passed: bool,
+    n_issues: int,
+    reason: str,
+) -> dict:
+    """Builds a decision record for the Giskard vulnerability scan gate.
+
+    This function constructs a standardized decision record documenting the
+    outcome of a Giskard model scan.  The scan probes the candidate model for
+    slice-based performance failures, robustness issues, and other
+    vulnerabilities that aggregate metrics miss.
+
+    Args:
+        passed (bool):
+            ``True`` if the scan found no blocking issues (or if blocking is
+            disabled via ``config.GISKARD_BLOCK_ON_ISSUES``).
+            ``False`` if the scan detected major/critical vulnerabilities that
+            should prevent promotion.
+        n_issues (int):
+            Total number of issues detected by the Giskard scan.
+        reason (str):
+            A human-readable explanation of the scan outcome, including a
+            breakdown of issue severity levels.
+
+    Returns:
+        dict:
+            A complete decision record dictionary, formatted by
+            :func:`make_decision`, ready for logging with
+            :func:`log_decision_to_mlflow`.
+            The ``stage`` will be ``"giskard_scan"``.
+    """
+    return make_decision(
+        stage="giskard_scan",
+        action="pass" if passed else "block_promotion",
+        criteria={
+            "block_on_issues": config.GISKARD_BLOCK_ON_ISSUES,
+            "max_scan_rows": config.GISKARD_MAX_SCAN_ROWS,
+        },
+        evidence={
+            "n_issues": n_issues,
+            "scan_passed": passed,
+        },
+        reason=reason,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 7. Log all decisions as a combined artifact
 # ---------------------------------------------------------------------------
 
 

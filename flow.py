@@ -177,6 +177,16 @@ class GreenTaxiTipFlow(FlowSpec):
         type=bool,
         help="If True, run Optuna Bayesian hyperparameter tuning before training. Adds ~3 min per retrain but finds better parameters.",
     )
+    giskard_scan = Parameter(
+        "giskard-scan",
+        default=False,
+        type=bool,
+        help="If True, run a Giskard vulnerability scan on the candidate model "
+             "before promotion (Stretch B). The scan probes for slice-based "
+             "performance failures and robustness issues. If critical issues are "
+             "found, promotion is blocked. The HTML report is always logged to "
+             "MLflow. Requires the 'giskard' package to be installed.",
+    )
 
     # ── Step: start ───────────────────────────────────────────────────
 
@@ -1116,6 +1126,41 @@ class GreenTaxiTipFlow(FlowSpec):
                 rmse_champion_on_ref=rmse_champion_on_ref,
                 integrity_warn=self.integrity_warn,
             )
+
+            # ── Stretch B: Giskard vulnerability scan (optional) ──
+            # Runs only when --giskard-scan is set AND P1–P4 passed.
+            # Can override promote=True → False if critical issues found.
+            if promote and self.giskard_scan:
+                # Load the candidate model via sklearn flavor to get the
+                # raw XGBRegressor (not a PyFunc wrapper) for Giskard.
+                candidate_uri = f"models:/{self.model_name}/{self.candidate_version}"
+                candidate_model = mlflow.sklearn.load_model(candidate_uri)
+                scan_passed, scan_reason, n_issues = model_utils.run_giskard_scan(
+                    model=candidate_model,
+                    eval_df=self.batch_eng,
+                    feature_cols=feature_cols,
+                )
+                # Log the Giskard decision
+                giskard_decision = decision_logger.make_giskard_decision(
+                    passed=scan_passed,
+                    n_issues=n_issues,
+                    reason=scan_reason,
+                )
+                decision_logger.log_decision_to_mlflow(
+                    giskard_decision, artifact_name="giskard_decision.json"
+                )
+                self.decisions.append(giskard_decision)
+                mlflow.set_tag("giskard_scan_passed", str(scan_passed))
+                mlflow.log_metric("giskard_issues", n_issues)
+
+                if not scan_passed:
+                    promote = False
+                    promote_reason = scan_reason
+                    logger.warning(
+                        "🚫  Giskard scan blocked promotion: %s", scan_reason
+                    )
+            elif not self.giskard_scan:
+                logger.info("⏭  Giskard scan skipped (--giskard-scan not set).")
 
             # ── Persist promotion decision as an MLflow artifact ──
             promotion_decision = decision_logger.make_promotion_decision(

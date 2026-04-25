@@ -55,9 +55,12 @@ from __future__ import annotations
 
 import math
 import logging
+import os
+import tempfile
 from datetime import datetime, timezone
 
 import numpy as np
+import pandas as pd
 import xgboost as xgb
 import optuna
 
@@ -889,3 +892,160 @@ def log_model_to_mlflow(model, X_train, model_name: str) -> str:
         model_info.model_uri,
     )
     return run_id
+
+
+# ---------------------------------------------------------------------------
+# 8. Giskard vulnerability scan (Stretch B — optional)
+# ---------------------------------------------------------------------------
+
+
+def run_giskard_scan(
+    model,
+    eval_df: pd.DataFrame,
+    feature_cols: list[str],
+    target_col: str = config.TARGET_COL,
+    categorical_cols: list[str] | None = None,
+) -> tuple[bool, str, int]:
+    """Run a Giskard vulnerability scan on a candidate model.
+
+    Wraps the candidate model and evaluation data in Giskard objects, runs
+    ``giskard.scan()``, saves the HTML report as an MLflow artifact, and
+    returns whether the scan passed (no major/critical issues found).
+
+    This function uses a **lazy import** of the ``giskard`` package so that
+    it remains an optional dependency — the pipeline works without it
+    installed as long as ``--giskard-scan`` is not set.
+
+    Parameters
+    ----------
+    model : fitted estimator
+        The trained candidate model (e.g. ``xgb.XGBRegressor``).  Must
+        expose a ``.predict()`` method compatible with scikit-learn.
+    eval_df : pd.DataFrame
+        Evaluation DataFrame containing both feature columns and the target
+        column.  A sample of up to ``config.GISKARD_MAX_SCAN_ROWS`` rows
+        is used for the scan.
+    feature_cols : list[str]
+        Ordered list of feature column names the model expects.
+    target_col : str
+        Name of the target column in ``eval_df``.  Defaults to
+        ``config.TARGET_COL`` (``"tip_amount"``).
+    categorical_cols : list[str] | None
+        Column names to treat as categorical.  Defaults to
+        ``config.CATEGORICAL_FEATURES`` if ``None``.
+
+    Returns
+    -------
+    tuple[bool, str, int]
+        - **passed** (bool): ``True`` if no major/critical issues were
+          found (or if ``config.GISKARD_BLOCK_ON_ISSUES`` is ``False``).
+        - **reason** (str): Human-readable summary of the scan outcome.
+        - **n_issues** (int): Total number of issues detected by the scan.
+
+    Notes
+    -----
+    - If ``giskard`` is not installed, the function logs a warning and
+      returns ``(True, "Giskard not installed — scan skipped", 0)``.
+    - The HTML scan report is always logged to MLflow as
+      ``giskard_scan_report.html``, regardless of pass/fail.
+    - The scan dataset is sampled to ``config.GISKARD_MAX_SCAN_ROWS`` rows
+      to keep scan time reasonable (~1–3 minutes).
+    """
+    try:
+        import giskard  # lazy import — optional dependency
+    except ImportError:
+        logger.warning(
+            "giskard package not installed — skipping vulnerability scan. "
+            "Install with: pip install giskard"
+        )
+        return True, "Giskard not installed — scan skipped", 0
+
+    if categorical_cols is None:
+        categorical_cols = config.CATEGORICAL_FEATURES
+
+    # ── Sample the evaluation data to keep scan time manageable ──
+    max_rows = config.GISKARD_MAX_SCAN_ROWS
+    if max_rows and len(eval_df) > max_rows:
+        scan_df = eval_df.sample(n=max_rows, random_state=42).reset_index(drop=True)
+        logger.info(
+            "Giskard scan: sampled %d / %d rows for scanning.", max_rows, len(eval_df)
+        )
+    else:
+        scan_df = eval_df.copy()
+
+    # ── Wrap model for Giskard ──
+    def predict_fn(df: pd.DataFrame) -> np.ndarray:
+        """Prediction function compatible with Giskard's Model wrapper."""
+        return model.predict(df[feature_cols])
+
+    gsk_model = giskard.Model(
+        model=predict_fn,
+        model_type="regression",
+        name="green_taxi_tip_candidate",
+        feature_names=feature_cols,
+    )
+
+    # ── Wrap dataset for Giskard ──
+    gsk_dataset = giskard.Dataset(
+        df=scan_df[feature_cols + [target_col]],
+        target=target_col,
+        name="batch_eval",
+        cat_columns=categorical_cols,
+    )
+
+    # ── Run the scan ──
+    logger.info("🔍  Running Giskard vulnerability scan…")
+    scan_results = giskard.scan(gsk_model, gsk_dataset)
+
+    # ── Save HTML report as MLflow artifact ──
+    tmp_dir = tempfile.mkdtemp()
+    report_path = os.path.join(tmp_dir, "giskard_scan_report.html")
+    scan_results.to_html(report_path)
+    mlflow.log_artifact(report_path)
+    logger.info("📄  Giskard scan report logged as MLflow artifact.")
+
+    # Clean up temp files
+    if os.path.exists(report_path):
+        os.remove(report_path)
+    if os.path.isdir(tmp_dir):
+        os.rmdir(tmp_dir)
+
+    # ── Evaluate scan results ──
+    issues = scan_results.issues if hasattr(scan_results, "issues") else []
+    n_issues = len(issues)
+
+    if n_issues == 0:
+        reason = "Giskard scan passed — no vulnerabilities detected."
+        logger.info("✅  %s", reason)
+        return True, reason, n_issues
+
+    # Categorise issues by level
+    issue_levels = [
+        getattr(issue, "level", getattr(issue, "importance", "UNKNOWN"))
+        for issue in issues
+    ]
+    level_summary = {}
+    for lvl in issue_levels:
+        level_summary[str(lvl)] = level_summary.get(str(lvl), 0) + 1
+
+    level_str = ", ".join(f"{k}: {v}" for k, v in sorted(level_summary.items()))
+
+    if config.GISKARD_BLOCK_ON_ISSUES:
+        # Check for major/critical issues that should block promotion
+        blocking_levels = {"MAJOR", "CRITICAL", "HIGH"}
+        has_blocking = any(str(lvl).upper() in blocking_levels for lvl in issue_levels)
+
+        if has_blocking:
+            reason = (
+                f"Giskard scan FAILED — {n_issues} issue(s) detected "
+                f"({level_str}). Blocking promotion."
+            )
+            logger.warning("🚫  %s", reason)
+            return False, reason, n_issues
+
+    reason = (
+        f"Giskard scan completed — {n_issues} issue(s) detected "
+        f"({level_str}), none blocking."
+    )
+    logger.info("⚠️  %s", reason)
+    return True, reason, n_issues

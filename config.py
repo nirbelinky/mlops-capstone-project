@@ -304,3 +304,23 @@ OPTUNA_N_TRIALS: int = 30
 
 # Number of cross-validation folds used to evaluate each trial.
 OPTUNA_CV_FOLDS: int = 5
+
+# ===========================================================================
+# Giskard vulnerability scan (Stretch B — optional)
+# ---------------------------------------------------------------------------
+# When enabled via the ``--giskard-scan`` Metaflow parameter, the pipeline
+# runs a Giskard model scan after evaluation but before promotion.  The scan
+# probes the candidate model for slice-based performance failures, robustness
+# issues, and other vulnerabilities that aggregate metrics (RMSE, MAE) miss.
+#
+# Used by: model_utils.run_giskard_scan(), flow.py (candidate_gate step)
+# ===========================================================================
+
+# If True, any issue with level "MAJOR" or "CRITICAL" blocks promotion.
+# Set to False to log the scan report without gating on it.
+GISKARD_BLOCK_ON_ISSUES: bool = True
+
+# Maximum number of dataset rows to feed into the Giskard scan.
+# Scanning is computationally expensive; sampling keeps it fast.
+# Set to None to scan the full dataset (not recommended for large batches).
+GISKARD_MAX_SCAN_ROWS: int = 5000
