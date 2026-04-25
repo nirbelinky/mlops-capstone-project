@@ -18,6 +18,7 @@ What gets deleted
 -----------------
 * ``.metaflow/``          — Metaflow run metadata and artifacts
 * ``mlruns/``             — Local MLflow artifact store
+* ``data/``               — Downloaded / generated data files
 * ``__pycache__/``        — Python bytecode caches (this dir + subdirs)
 * MLflow DB contents      — Registered model aliases, model versions,
                             the registered model entry, and all runs
@@ -27,7 +28,6 @@ What gets deleted
 What is preserved
 -----------------
 * Source code (``.py``, ``.md``)
-* Data files (``data/*.parquet``)
 * ``.gitignore``
 * The MLflow database **file** (only its contents are cleaned)
 
@@ -69,6 +69,7 @@ from config import MLFLOW_EXPERIMENT_NAME, MLFLOW_TRACKING_URI, MODEL_NAME
 _DIRS_TO_REMOVE: list[tuple[str, str]] = [
     ("Metaflow state", ".metaflow"),
     ("MLflow local artifacts", "mlruns"),
+    ("Data directory", "data"),
 ]
 
 
