@@ -188,7 +188,6 @@ class GreenTaxiTipFlow(FlowSpec):
              "MLflow. Requires the 'giskard' package to be installed.",
     )
 
-    # ── Step: start ───────────────────────────────────────────────────
 
     @step
     def start(self):
@@ -251,8 +250,6 @@ class GreenTaxiTipFlow(FlowSpec):
 
         # Transition to the next step in the pipeline.
         self.next(self.load_data)
-
-    # ── Step A: load_data ─────────────────────────────────────────────
 
     @step
     def load_data(self):
@@ -323,8 +320,6 @@ class GreenTaxiTipFlow(FlowSpec):
 
         # Transition to the next step: integrity_gate.
         self.next(self.integrity_gate)
-
-    # ── Step B: integrity_gate ────────────────────────────────────────
 
     @step
     def integrity_gate(self):
@@ -407,8 +402,6 @@ class GreenTaxiTipFlow(FlowSpec):
         # to decide whether to execute their logic or skip.
         self.next(self.feature_engineering)
 
-    # ── Step C: feature_engineering ───────────────────────────────────
-
     @step
     def feature_engineering(self):
         """Applies deterministic feature transformations to reference and batch data.
@@ -475,8 +468,6 @@ class GreenTaxiTipFlow(FlowSpec):
 
         # Transition to the next step: load_champion.
         self.next(self.load_champion)
-
-    # ── Step D: load_champion ─────────────────────────────────────────
 
     @step
     def load_champion(self):
@@ -637,8 +628,6 @@ class GreenTaxiTipFlow(FlowSpec):
 
         # Transition to the next step: evaluate_champion.
         self.next(self.evaluate_champion)
-
-    # ── Step E: evaluate_champion ─────────────────────────────────────
 
     @step
     def evaluate_champion(self):
@@ -826,8 +815,6 @@ class GreenTaxiTipFlow(FlowSpec):
 
         # Transition to the next step: retrain.
         self.next(self.retrain)
-
-    # ── Step F: retrain ───────────────────────────────────────────────
 
     @step
     def retrain(self):
@@ -1061,8 +1048,6 @@ class GreenTaxiTipFlow(FlowSpec):
         # Transition to the next step: candidate_gate.
         self.next(self.candidate_gate)
 
-    # ── Step G: candidate_gate ────────────────────────────────────────
-
     @step
     def candidate_gate(self):
         """Decide whether to promote the candidate model to champion (Step G).
@@ -1263,8 +1248,6 @@ class GreenTaxiTipFlow(FlowSpec):
             mlflow.end_run()
 
         self.next(self.end)
-
-    # ── Step: end ─────────────────────────────────────────────────────
 
     @step
     def end(self):

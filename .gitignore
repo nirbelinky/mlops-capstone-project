@@ -7,3 +7,4 @@ __pycache__/
 # Metaflow artifacts
 .metaflow/
 mlflow_tracking/
+mlruns/
